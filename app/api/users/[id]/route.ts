@@ -18,10 +18,10 @@ const database = getDatabase(app);
 // GET - Fetch specific user
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     const snapshot = await get(ref(database, `users/${userId}`));
 
     if (snapshot.exists()) {
@@ -44,10 +44,10 @@ export async function GET(
 // PUT - Update user
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     const body = await request.json();
 
     const snapshot = await get(ref(database, `users/${userId}`));
@@ -87,10 +87,10 @@ export async function PUT(
 // DELETE - Delete user
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     const snapshot = await get(ref(database, `users/${userId}`));
 
     if (!snapshot.exists()) {
