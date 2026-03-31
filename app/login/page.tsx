@@ -2,22 +2,45 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const router = useRouter();
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage(null);
     
-    // Simulasi login
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (data?.error === 'ENV_NOT_CONFIGURED') {
+          setErrorMessage('Konfigurasi env belum terisi. Lengkapi .env.local dulu.');
+          return;
+        }
+        setErrorMessage(data?.error || 'Login gagal');
+        return;
+      }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Login gagal');
+    } finally {
       setIsLoading(false);
-      alert(`Login dengan email: ${email}`);
-    }, 1500);
+    }
   };
 
   return (
@@ -56,19 +79,25 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {errorMessage && (
+              <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {errorMessage}
+              </div>
+            )}
+
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Input */}
+              {/* Identifier Input */}
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-white mb-2">
-                  Email
+                <label htmlFor="identifier" className="block text-sm font-semibold text-white mb-2">
+                  Username / Email
                 </label>
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nama@contoh.com"
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="root atau nama@contoh.com"
                   className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white placeholder-purple-300 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                   required
                 />
@@ -138,26 +167,12 @@ export default function LoginPage() {
                 )}
               </button>
 
-              {/* Demo Credentials */}
-              <div className="rounded-lg border border-purple-600 bg-purple-900/20 p-4">
-                <p className="text-xs font-semibold text-purple-300 mb-2">Demo Test:</p>
-                <div className="space-y-1 text-xs text-purple-200">
-                  <p>📧 <span className="font-mono">demo@otw.com</span></p>
-                  <p>🔒 <span className="font-mono">password123</span></p>
-                </div>
-              </div>
             </form>
           </div>
         </div>
 
         {/* Footer */}
         <div className="w-full max-w-md mt-8 text-center">
-          <p className="text-sm text-purple-200">
-            Belum punya akun?{' '}
-            <Link href="#" className="font-semibold text-purple-400 hover:text-purple-300 transition">
-              Daftar sekarang
-            </Link>
-          </p>
           <p className="text-xs text-purple-300 mt-4">
             <Link href="/" className="hover:text-purple-200 transition">
               Kembali ke beranda

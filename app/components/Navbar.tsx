@@ -3,14 +3,23 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-export default function Navbar() {
+type NavbarProps = {
+  needsInstall: boolean;
+  branding?: {
+    siteName: string;
+    logoUrl?: string;
+  };
+};
+
+export default function Navbar({ needsInstall, branding }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
     { label: 'Fitur', href: '#fitur' },
     { label: 'Role', href: '#role' },
     { label: 'Alur', href: '#alur' },
-    { label: 'Instalasi', href: '#install' },
+    ...(needsInstall ? [{ label: 'Instalasi', href: '#install' }] : []),
+    ...(!needsInstall ? [{ label: 'Login', href: '/login' }] : []),
   ];
 
   return (
@@ -18,14 +27,25 @@ export default function Navbar() {
       <div className="mx-auto flex items-center justify-between w-full max-w-6xl px-6 py-4 md:px-10">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 text-sm font-semibold tracking-[0.2em] text-white">
-            OTW
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 text-sm font-semibold tracking-[0.2em] text-white">
+            {branding?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={branding.logoUrl}
+                alt="Logo"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              'OTW'
+            )}
           </div>
           <div className="flex flex-col">
             <span className="text-xs uppercase tracking-[0.3em] text-purple-300">
               Open Source LMS
             </span>
-            <span className="text-base font-semibold text-white">OTW Platform</span>
+            <span className="text-base font-semibold text-white">
+              {branding?.siteName || 'OTW Platform'}
+            </span>
           </div>
         </div>
 
@@ -110,11 +130,11 @@ export default function Navbar() {
 
           <div className="mt-6 border-t border-purple-700 pt-6">
             <Link
-              href="#install"
+              href={needsInstall ? '#install' : '/login'}
               className="block text-center rounded-full bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-3 text-sm font-semibold text-white transition hover:shadow-lg hover:shadow-purple-600/50 mb-3"
               onClick={() => setIsOpen(false)}
             >
-              Mulai Instalasi
+              {needsInstall ? 'Mulai Instalasi' : 'Login'}
             </Link>
             <Link
               href="#fitur"

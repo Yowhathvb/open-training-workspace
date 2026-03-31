@@ -35,6 +35,10 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+html {
+  scroll-padding-top: 96px;
+}
+
 @keyframes float-slow {
   0%,
   100% {
