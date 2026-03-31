@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, get, update, remove } from 'firebase/database';
 import { deleteUserFromFirestoreBestEffort, syncUserToFirestoreBestEffort } from '@/lib/firestore-sync';
+import { requireRole } from '@/lib/auth/api';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const { id: userId } = await params;
     const snapshot = await get(ref(database, `users/${userId}`));
 
@@ -50,6 +52,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const { id: userId } = await params;
     const body = await request.json();
 
@@ -94,6 +97,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const { id: userId } = await params;
     const snapshot = await get(ref(database, `users/${userId}`));
 

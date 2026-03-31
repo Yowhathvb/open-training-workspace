@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, get, update } from 'firebase/database';
 import { syncUserToFirestoreBestEffort } from '@/lib/firestore-sync';
+import { requireRole } from '@/lib/auth/api';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,7 @@ const database = getDatabase(app);
 // GET - Fetch pending users
 export async function GET(request: NextRequest) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const snapshot = await get(ref(database, 'users'));
     
     if (snapshot.exists()) {
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest) {
 // PUT - Approve or Reject user
 export async function PUT(request: NextRequest) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const body = await request.json();
     const { userId, status } = body; // status: 'approved' or 'rejected'
 

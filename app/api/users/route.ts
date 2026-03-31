@@ -3,6 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, push, get, set } from 'firebase/database';
 import crypto from 'crypto';
 import { syncUserToFirestoreBestEffort } from '@/lib/firestore-sync';
+import { requireRole } from '@/lib/auth/api';
 
 export const runtime = 'nodejs';
 
@@ -27,6 +28,7 @@ function hashPassword(password: string): string {
 // GET - Fetch all users
 export async function GET(request: NextRequest) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const snapshot = await get(ref(database, 'users'));
     
     if (snapshot.exists()) {
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest) {
 // POST - Create new user
 export async function POST(request: NextRequest) {
   try {
+    requireRole(request, ['root', 'administrator']);
     const body = await request.json();
     const {
       namaLengkap,

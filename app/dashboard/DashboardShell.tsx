@@ -16,6 +16,9 @@ export default function DashboardShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const isGuru = role === 'guru';
+  const isAdminLike = role === 'root' || role === 'administrator';
+
   const menuItems = [
     {
       name: 'Dashboard',
@@ -26,33 +29,41 @@ export default function DashboardShell({
         </svg>
       ),
     },
-    {
-      name: 'Menunggu Persetujuan',
-      href: '/dashboard/pending-approval',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-    },
-    {
-      name: 'Manajemen User',
-      href: '/dashboard/users',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 12H9m6 0a6 6 0 11-12 0 6 6 0 0112 0z" />
-        </svg>
-      ),
-    },
-    {
-      name: 'Manajemen Kursus',
-      href: '/dashboard/courses',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C6.5 6.253 2 10.998 2 17s4.5 10.747 10 10.747c5.5 0 10-4.998 10-10.747S17.5 6.253 12 6.253z" />
-        </svg>
-      ),
-    },
+    ...(isAdminLike
+      ? [
+          {
+            name: 'Menunggu Persetujuan',
+            href: '/dashboard/pending-approval',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+          },
+          {
+            name: 'Manajemen User',
+            href: '/dashboard/users',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 12H9m6 0a6 6 0 11-12 0 6 6 0 0112 0z" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
+    ...(isGuru || isAdminLike
+      ? [
+          {
+            name: 'Manajemen Kursus',
+            href: '/dashboard/courses',
+            icon: (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C6.5 6.253 2 10.998 2 17s4.5 10.747 10 10.747c5.5 0 10-4.998 10-10.747S17.5 6.253 12 6.253z" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
     {
       name: 'Kursus Saya',
       href: '/dashboard/my-courses',
