@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, get, update } from 'firebase/database';
+import { syncUserToFirestoreBestEffort } from '@/lib/firestore-sync';
+
+export const runtime = 'nodejs';
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyB-roQ2h1t0wM01XZd_4anI60E47qnO4bA",
@@ -69,6 +72,7 @@ export async function PUT(request: NextRequest) {
 
     const updatedSnapshot = await get(ref(database, `users/${userId}`));
     const userData = updatedSnapshot.val();
+    await syncUserToFirestoreBestEffort(userId, userData);
     const { password, ...userWithoutPassword } = userData;
 
     return NextResponse.json({

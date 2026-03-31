@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, push, get, set } from 'firebase/database';
 import crypto from 'crypto';
+import { syncUserToFirestoreBestEffort } from '@/lib/firestore-sync';
+
+export const runtime = 'nodejs';
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyB-roQ2h1t0wM01XZd_4anI60E47qnO4bA",
@@ -104,6 +107,9 @@ export async function POST(request: NextRequest) {
 
     const newUserRef = push(ref(database, 'users'));
     await set(newUserRef, userData);
+    if (newUserRef.key) {
+      await syncUserToFirestoreBestEffort(newUserRef.key, userData);
+    }
 
     // Return user data without password
     const { password: _, ...userWithoutPassword } = userData;
