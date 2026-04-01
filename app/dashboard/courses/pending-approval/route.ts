@@ -4,18 +4,17 @@ import { getDatabase, ref, get, update } from 'firebase/database';
 
 import { requireRole } from '@/lib/auth/api';
 import { syncCourseToFirestoreBestEffort } from '@/lib/firestore-sync-courses';
-import { isEnvConfigured } from '@/lib/app-config';
 
 export const runtime = 'nodejs';
 
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY!,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN!,
-  projectId: process.env.FIREBASE_PROJECT_ID!,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET!,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID!,
-  appId: process.env.FIREBASE_APP_ID!,
-  databaseURL: process.env.FIREBASE_DATABASE_URL!,
+  apiKey: process.env.FIREBASE_API_KEY || 'missing',
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'missing',
+  projectId: process.env.FIREBASE_PROJECT_ID || 'missing',
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'missing',
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || 'missing',
+  appId: process.env.FIREBASE_APP_ID || 'missing',
+  databaseURL: process.env.FIREBASE_DATABASE_URL || 'missing',
 };
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
@@ -28,9 +27,6 @@ function normalizeString(input: unknown) {
 // GET - list pending courses
 export async function GET(request: NextRequest) {
   try {
-    if (!isEnvConfigured()) {
-      return NextResponse.json({ error: 'ENV_NOT_CONFIGURED' }, { status: 503 });
-    }
     requireRole(request, ['root', 'administrator']);
     const snapshot = await get(ref(database, 'courses'));
     const courses: any[] = [];
@@ -60,9 +56,6 @@ export async function GET(request: NextRequest) {
 // PUT - approve/reject
 export async function PUT(request: NextRequest) {
   try {
-    if (!isEnvConfigured()) {
-      return NextResponse.json({ error: 'ENV_NOT_CONFIGURED' }, { status: 503 });
-    }
     const session = requireRole(request, ['root', 'administrator']);
     const body = await request.json();
     const courseId = normalizeString(body?.courseId);
@@ -97,3 +90,4 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
+
