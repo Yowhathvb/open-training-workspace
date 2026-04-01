@@ -28,12 +28,13 @@ function hashPassword(password: string): string {
 // GET - Fetch all users
 export async function GET(request: NextRequest) {
   try {
-    requireRole(request, ['root', 'administrator']);
+    const session = requireRole(request, ['root', 'administrator']);
     const snapshot = await get(ref(database, 'users'));
     
     if (snapshot.exists()) {
       const users: any[] = [];
       snapshot.forEach((childSnapshot) => {
+        if (childSnapshot.key === session.userId) return;
         const userData = childSnapshot.val();
         // Remove password hash from response
         const { password, ...userWithoutPassword } = userData;
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
 // POST - Create new user
 export async function POST(request: NextRequest) {
   try {
-    requireRole(request, ['root', 'administrator']);
+    const session = requireRole(request, ['root', 'administrator']);
     const body = await request.json();
     const {
       namaLengkap,
@@ -73,6 +74,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    // Role rules:
+    // - root can create any role (including root/admin)
+    // - administrator can only create guru/siswa
+    if (session.role === 'administrator' && (role === 'root' || role === 'administrator')) {
+      return NextResponse.json(
+        { error: 'Administrator tidak boleh membuat akun root/administrator' },
+        { status: 403 }
+      );
+    }
+    if (role === 'root' && session.role !== 'root') {
+      return NextResponse.json(
+        { error: 'Hanya root yang boleh membuat akun root' },
+        { status: 403 }
+      );
+    }
+    if (role === 'administrator' && session.role !== 'root') {
+      return NextResponse.json(
+        { error: 'Hanya root yang boleh membuat akun administrator' },
+        { status: 403 }
       );
     }
 
@@ -103,7 +126,7 @@ export async function POST(request: NextRequest) {
       noHp: noHp || '',
       emailPemulihan: emailPemulihan || '',
       role,
-      status: 'pending', // New users start as pending
+      status: role === 'root' || role === 'administrator' ? 'approved' : 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

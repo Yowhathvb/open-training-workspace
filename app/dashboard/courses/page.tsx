@@ -201,9 +201,19 @@ export default function CoursesPage() {
                 Kunci: <span className="font-mono">{course.courseKey}</span>
               </p>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs bg-purple-700/50 text-purple-200 px-2 py-1 rounded">
-                  Aktif
-                </span>
+                {course.status === 'pending' ? (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+                    Menunggu persetujuan
+                  </span>
+                ) : course.status === 'rejected' ? (
+                  <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">
+                    Ditolak
+                  </span>
+                ) : (
+                  <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">
+                    Disetujui
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <Link

@@ -24,6 +24,7 @@ const DEFAULT_PASSWORDS: { [key: string]: string } = {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -46,8 +47,21 @@ export default function UsersPage() {
 
   // Fetch users on component mount
   useEffect(() => {
+    fetchMe();
     fetchUsers();
   }, []);
+
+  const fetchMe = async () => {
+    try {
+      const response = await fetch('/api/auth/me');
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setMyRole(data?.user?.role || null);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -80,6 +94,11 @@ export default function UsersPage() {
     let password = formData.password;
     if (useDefaultPassword) {
       password = DEFAULT_PASSWORDS[formData.role] || 'Default123!';
+    }
+
+    if (myRole === 'administrator' && (formData.role === 'root' || formData.role === 'administrator')) {
+      alert('Administrator tidak boleh membuat akun root/administrator');
+      return;
     }
 
     if (!useDefaultPassword && !formData.password) {
@@ -120,6 +139,15 @@ export default function UsersPage() {
     e.preventDefault();
 
     if (!selectedUser) return;
+
+    if (myRole === 'administrator' && (selectedUser.role === 'root' || selectedUser.role === 'administrator')) {
+      alert('Administrator tidak boleh mengubah akun root/administrator');
+      return;
+    }
+    if (myRole === 'administrator' && (formData.role === 'root' || formData.role === 'administrator')) {
+      alert('Administrator tidak boleh menetapkan role root/administrator');
+      return;
+    }
 
     try {
       const response = await fetch(`/api/users/${selectedUser.id}`, {
@@ -486,9 +514,10 @@ export default function UsersPage() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
+                  {myRole === 'root' && <option value="root">Root</option>}
                   <option value="siswa">Siswa</option>
                   <option value="guru">Guru</option>
-                  <option value="administrator">Administrator</option>
+                  {myRole === 'root' && <option value="administrator">Administrator</option>}
                 </select>
               </div>
 
@@ -607,11 +636,13 @@ export default function UsersPage() {
                   name="role"
                   value={formData.role}
                   onChange={handleInputChange}
+                  disabled={myRole === 'administrator' && (selectedUser.role === 'root' || selectedUser.role === 'administrator')}
                   className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
+                  {myRole === 'root' && <option value="root">Root</option>}
                   <option value="siswa">Siswa</option>
                   <option value="guru">Guru</option>
-                  <option value="administrator">Administrator</option>
+                  {myRole === 'root' && <option value="administrator">Administrator</option>}
                 </select>
               </div>
 

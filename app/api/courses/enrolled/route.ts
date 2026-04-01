@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       coursesSnapshot.forEach((child) => {
         if (!child.key || !courseIds.includes(child.key)) return;
         const course = child.val();
+        if (course?.status !== 'approved') return;
         courses.push({
           id: child.key,
           title: normalizeString(course?.title),
@@ -59,4 +60,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-

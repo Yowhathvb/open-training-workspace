@@ -4,6 +4,7 @@ import { getDatabase, ref, get, push, set } from 'firebase/database';
 import crypto from 'crypto';
 
 import { requireSession, requireRole } from '@/lib/auth/api';
+import { syncCourseToFirestoreBestEffort } from '@/lib/firestore-sync-courses';
 
 export const runtime = 'nodejs';
 
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
     if (snapshot.exists()) {
       snapshot.forEach((child) => {
         const course = child.val();
+        if (course?.status !== 'approved') return;
         const courseId = child.key;
         const title = normalizeString(course?.title);
         const courseKey = normalizeString(course?.courseKey);
@@ -109,6 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
+    const status = session.role === 'guru' ? 'pending' : 'approved';
     const courseData = {
       title,
       courseKey,
@@ -116,13 +119,14 @@ export async function POST(request: NextRequest) {
       createdBy: session.userId,
       createdAt: now,
       updatedAt: now,
-      status: 'active',
+      status,
     };
 
     const newCourseRef = push(ref(database, 'courses'));
     await set(newCourseRef, courseData);
     if (newCourseRef.key) {
       await set(ref(database, `course_keys/${courseKey}`), newCourseRef.key);
+      await syncCourseToFirestoreBestEffort(newCourseRef.key, courseData);
     }
 
     return NextResponse.json({
@@ -134,4 +138,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-

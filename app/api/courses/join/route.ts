@@ -60,6 +60,9 @@ export async function POST(request: NextRequest) {
     }
 
     const course = courseSnapshot.val();
+    if (course?.status !== 'approved') {
+      return NextResponse.json({ error: 'Kursus belum disetujui' }, { status: 403 });
+    }
     if (course?.passwordHash !== hashPassword(password)) {
       return NextResponse.json({ error: 'Password kursus salah' }, { status: 401 });
     }
@@ -79,4 +82,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-

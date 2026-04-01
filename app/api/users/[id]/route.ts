@@ -52,7 +52,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireRole(request, ['root', 'administrator']);
+    const session = requireRole(request, ['root', 'administrator']);
     const { id: userId } = await params;
     const body = await request.json();
 
@@ -60,6 +60,34 @@ export async function PUT(
 
     if (!snapshot.exists()) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const currentUser = snapshot.val();
+    const targetRole = currentUser?.role;
+
+    if (userId === session.userId) {
+      return NextResponse.json(
+        { error: 'Tidak boleh mengubah akun yang sedang login lewat menu ini' },
+        { status: 403 }
+      );
+    }
+
+    // Administrator restrictions:
+    // - cannot edit root/admin accounts
+    // - cannot set role to root/admin for anyone
+    if (session.role === 'administrator') {
+      if (targetRole === 'root' || targetRole === 'administrator') {
+        return NextResponse.json(
+          { error: 'Administrator tidak boleh mengubah akun root/administrator' },
+          { status: 403 }
+        );
+      }
+      if (body?.role === 'root' || body?.role === 'administrator') {
+        return NextResponse.json(
+          { error: 'Administrator tidak boleh menetapkan role root/administrator' },
+          { status: 403 }
+        );
+      }
     }
 
     // Update only allowed fields
@@ -97,12 +125,47 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireRole(request, ['root', 'administrator']);
+    const session = requireRole(request, ['root', 'administrator']);
     const { id: userId } = await params;
     const snapshot = await get(ref(database, `users/${userId}`));
 
     if (!snapshot.exists()) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (userId === session.userId) {
+      return NextResponse.json(
+        { error: 'Tidak boleh menghapus akun yang sedang login' },
+        { status: 403 }
+      );
+    }
+
+    const targetUser = snapshot.val();
+    const targetRole = targetUser?.role;
+
+    // Administrator cannot delete root/admin accounts
+    if (session.role === 'administrator' && (targetRole === 'root' || targetRole === 'administrator')) {
+      return NextResponse.json(
+        { error: 'Administrator tidak boleh menghapus akun root/administrator' },
+        { status: 403 }
+      );
+    }
+
+    // Root: prevent deleting last root account
+    if (session.role === 'root' && targetRole === 'root') {
+      const usersSnapshot = await get(ref(database, 'users'));
+      let rootCount = 0;
+      if (usersSnapshot.exists()) {
+        usersSnapshot.forEach((child) => {
+          if (child.val()?.role === 'root') rootCount += 1;
+        });
+      }
+      if (rootCount <= 1) {
+        return NextResponse.json(
+          { error: 'Tidak boleh menghapus root terakhir' },
+          { status: 403 }
+        );
+      }
     }
 
     await remove(ref(database, `users/${userId}`));
