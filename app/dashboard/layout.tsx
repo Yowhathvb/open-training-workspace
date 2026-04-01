@@ -13,5 +13,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/login');
   }
 
-  return <DashboardShell role={session.role}>{children}</DashboardShell>;
+  const displayName = (session.namaLengkap || session.username || session.email || '').trim();
+  return (
+    <DashboardShell role={session.role} displayName={displayName}>
+      {children}
+    </DashboardShell>
+  );
 }

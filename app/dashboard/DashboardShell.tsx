@@ -7,9 +7,11 @@ import { useRouter } from 'next/navigation';
 export default function DashboardShell({
   children,
   role,
+  displayName,
 }: {
   children: React.ReactNode;
   role: string;
+  displayName: string;
 }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -132,7 +134,15 @@ export default function DashboardShell({
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white font-bold text-sm">
                 OTW
               </div>
-              <span className="text-white font-semibold">OTW</span>
+              <div className="leading-tight">
+                <div className="text-white font-semibold">OTW</div>
+                {displayName && (
+                  <div className="mt-1 text-xs text-purple-200">
+                    Halo, <span className="font-semibold text-white">{displayName}</span>.
+                    <div className="text-purple-300">Selamat datang di OTW.</div>
+                  </div>
+                )}
+              </div>
             </Link>
           )}
           <button
@@ -245,7 +255,14 @@ export default function DashboardShell({
           sidebarOpen ? 'md:ml-72' : 'md:ml-20'
         }`}
       >
-        <div className="md:pt-0 pt-20 bg-purple-950 min-h-screen">{children}</div>
+        <div className="md:pt-0 pt-20 bg-purple-950 min-h-screen">
+          {displayName && (
+            <div className="md:hidden px-6 pt-4 text-sm text-purple-200">
+              Halo, <span className="font-semibold text-white">{displayName}</span>. Selamat datang di OTW.
+            </div>
+          )}
+          {children}
+        </div>
       </main>
     </div>
   );
