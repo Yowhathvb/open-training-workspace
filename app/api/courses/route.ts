@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase, ref, get, push, set } from 'firebase/database';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import crypto from 'crypto';
 
 import { requireSession, requireRole } from '@/lib/auth/api';
 import { syncCourseToFirestoreBestEffort } from '@/lib/firestore-sync-courses';
+import { getFirestoreDb } from '@/lib/firebase-server';
 
 export const runtime = 'nodejs';
 
@@ -45,36 +47,35 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = normalizeString(searchParams.get('q') || '').toLowerCase();
 
-    const snapshot = await get(ref(database, 'courses'));
-    const results: any[] = [];
+    const firestore = getFirestoreDb();
+    const snapshot = await getDocs(
+      query(collection(firestore, 'courses'), where('status', '==', 'approved'), limit(200))
+    );
 
-    if (snapshot.exists()) {
-      snapshot.forEach((child) => {
-        const course = child.val();
-        if (course?.status !== 'approved') return;
-        const courseId = child.key;
+    const results = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...(doc.data() as any) }))
+      .map((course) => {
         const title = normalizeString(course?.title);
         const courseKey = normalizeString(course?.courseKey);
-        const matches =
-          !q ||
-          title.toLowerCase().includes(q) ||
-          courseKey.toLowerCase().includes(q);
-
-        if (matches) {
-          results.push({
-            id: courseId,
-            title,
-            courseKey,
-            createdBy: course?.createdBy || '',
-            createdAt: course?.createdAt || null,
-          });
-        }
+        return {
+          id: course.id,
+          title,
+          courseKey,
+          createdBy: course?.createdBy || '',
+          createdAt: course?.createdAt || null,
+        };
+      })
+      .filter((course) => {
+        if (!q) return true;
+        return (
+          course.title.toLowerCase().includes(q) ||
+          course.courseKey.toLowerCase().includes(q)
+        );
       });
-    }
 
     return NextResponse.json({ ok: true, courses: results });
   } catch (error: any) {
-    const status = error?.status || 500;
+    const status = error?.message === 'ENV_NOT_CONFIGURED' ? 503 : (error?.status || 500);
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }

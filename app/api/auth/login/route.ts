@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
       email: matchedUser.email,
       role: matchedUser.role,
       username: matchedUser.username,
-      namaLengkap: matchedUser.namaLengkap,
+      namaLengkap: matchedUser.namaLengkap || matchedUser.nama,
     });
 
     const response = NextResponse.json({
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
         email: matchedUser.email,
         role: matchedUser.role,
         username: matchedUser.username,
-        namaLengkap: matchedUser.namaLengkap,
+        namaLengkap: matchedUser.namaLengkap || matchedUser.nama,
       },
     });
 

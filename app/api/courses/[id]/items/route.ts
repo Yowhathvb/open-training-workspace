@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, ref, get, push, set } from 'firebase/database';
+import { doc, getDoc } from 'firebase/firestore';
+import { get, push, ref, set } from 'firebase/database';
 
 import { requireSession } from '@/lib/auth/api';
+import { getFirestoreDb, getRtdb } from '@/lib/firebase-server';
 
 export const runtime = 'nodejs';
-
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || 'missing',
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'missing',
-  projectId: process.env.FIREBASE_PROJECT_ID || 'missing',
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'missing',
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || 'missing',
-  appId: process.env.FIREBASE_APP_ID || 'missing',
-  databaseURL: process.env.FIREBASE_DATABASE_URL || 'missing',
-};
-
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const database = getDatabase(app);
 
 function normalizeString(input: unknown) {
   return typeof input === 'string' ? input.trim() : '';
@@ -30,10 +18,12 @@ function isValidType(input: string): input is ItemType {
 }
 
 async function canAccessCourse(courseId: string, userId: string) {
-  const courseSnapshot = await get(ref(database, `courses/${courseId}`));
-  if (!courseSnapshot.exists()) return { exists: false, isOwner: false, isEnrolled: false };
-  const course = courseSnapshot.val();
+  const firestore = getFirestoreDb();
+  const courseDoc = await getDoc(doc(firestore, 'courses', courseId));
+  if (!courseDoc.exists()) return { exists: false, isOwner: false, isEnrolled: false };
+  const course = courseDoc.data() as any;
   const isOwner = course?.createdBy === userId;
+  const database = getRtdb();
   const membershipSnapshot = await get(ref(database, `user_courses/${userId}/${courseId}`));
   const isEnrolled = membershipSnapshot.exists();
   return { exists: true, isOwner, isEnrolled };
@@ -51,6 +41,7 @@ export async function GET(
     if (!access.exists) return NextResponse.json({ error: 'Kursus tidak ditemukan' }, { status: 404 });
     if (!access.isOwner && !access.isEnrolled) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
+    const database = getRtdb();
     const snapshot = await get(ref(database, `course_items/${courseId}`));
     const items: any[] = [];
     if (snapshot.exists()) {
@@ -61,7 +52,7 @@ export async function GET(
 
     return NextResponse.json({ ok: true, items });
   } catch (error: any) {
-    const status = error?.status || 500;
+    const status = error?.message === 'ENV_NOT_CONFIGURED' ? 503 : (error?.status || 500);
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
@@ -102,13 +93,13 @@ export async function POST(
       createdAt: now,
     };
 
+    const database = getRtdb();
     const newItemRef = push(ref(database, `course_items/${courseId}`));
     await set(newItemRef, itemData);
 
     return NextResponse.json({ ok: true, item: { id: newItemRef.key, ...itemData } }, { status: 201 });
   } catch (error: any) {
-    const status = error?.status || 500;
+    const status = error?.message === 'ENV_NOT_CONFIGURED' ? 503 : (error?.status || 500);
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-
