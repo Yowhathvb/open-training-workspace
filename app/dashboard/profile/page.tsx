@@ -1,26 +1,94 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+type MeUser = {
+  id: string;
+  username: string;
+  namaLengkap: string;
+  email: string;
+  noHp: string;
+  nis: string;
+  emailPemulihan: string;
+  role: string;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+function roleLabel(role: string) {
+  if (role === 'root') return 'Root';
+  if (role === 'administrator') return 'Administrator';
+  if (role === 'guru') return 'Guru';
+  if (role === 'siswa') return 'Siswa';
+  return role || '-';
+}
 
 export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState({
-    name: 'Ahmad Rahman',
-    email: 'ahmad.rahman@example.com',
-    phone: '08123456789',
-    institution: 'Universitas Indonesia',
-    role: 'Student',
-    joinDate: '15 Januari 2024',
-  });
+  const [user, setUser] = useState<MeUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setProfile(prev => ({ ...prev, [name]: value }));
+  const [namaLengkap, setNamaLengkap] = useState('');
+  const [noHp, setNoHp] = useState('');
+  const [emailPemulihan, setEmailPemulihan] = useState('');
+
+  const joinDate = useMemo(() => {
+    if (!user?.createdAt) return '-';
+    const date = new Date(user.createdAt);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+  }, [user?.createdAt]);
+
+  const fetchMe = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch('/api/users/me');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMessage(data?.error || 'Gagal memuat profil');
+        return;
+      }
+      setUser(data.user);
+      setNamaLengkap(data.user?.namaLengkap || '');
+      setNoHp(data.user?.noHp || '');
+      setEmailPemulihan(data.user?.emailPemulihan || '');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Gagal memuat profil');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // TODO: Send to API
+  useEffect(() => {
+    fetchMe();
+  }, []);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ namaLengkap, noHp, emailPemulihan }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMessage(data?.error || 'Gagal menyimpan profil');
+        return;
+      }
+      setUser(data.user);
+      setIsEditing(false);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Gagal menyimpan profil');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -31,12 +99,25 @@ export default function ProfilePage() {
           <p className="text-purple-200">Kelola informasi akun Anda</p>
         </div>
         <button
-          onClick={() => setIsEditing(!isEditing)}
+          onClick={() => {
+            setErrorMessage(null);
+            setIsEditing(!isEditing);
+            setNamaLengkap(user?.namaLengkap || '');
+            setNoHp(user?.noHp || '');
+            setEmailPemulihan(user?.emailPemulihan || '');
+          }}
+          disabled={isLoading || !user}
           className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:shadow-lg hover:shadow-purple-600/50 text-white text-sm font-medium transition"
         >
           {isEditing ? 'Batal' : 'Edit Profil'}
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Profile Picture Section */}
       <div className="rounded-lg border border-purple-600 bg-purple-900/30 p-6 mb-6">
@@ -47,12 +128,14 @@ export default function ProfilePage() {
             </svg>
           </div>
           {isEditing && (
-            <button className="px-4 py-2 rounded-lg border border-purple-600 hover:bg-purple-900/30 text-white text-sm font-medium transition">
-              Ubah Foto
-            </button>
+            <div className="text-sm text-purple-200">
+              Foto profil belum tersedia.
+            </div>
           )}
         </div>
-        <p className="text-purple-200 text-sm">File format: JPG, PNG, GIF. Max ukuran: 2MB</p>
+        <p className="text-purple-200 text-sm">
+          {isLoading ? 'Memuat...' : user ? `@${user.username || '-'}` : '-'}
+        </p>
       </div>
 
       {/* Information Section */}
@@ -66,29 +149,21 @@ export default function ProfilePage() {
             {isEditing ? (
               <input
                 type="text"
-                name="name"
-                value={profile.name}
-                onChange={handleInputChange}
+                value={namaLengkap}
+                onChange={(e) => setNamaLengkap(e.target.value)}
                 className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             ) : (
-              <p className="text-white">{profile.name}</p>
+              <p className="text-white">{isLoading ? 'Memuat...' : (user?.namaLengkap || '-')}</p>
             )}
           </div>
 
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-purple-200 mb-2">Email</label>
-            {isEditing ? (
-              <input
-                type="email"
-                name="email"
-                value={profile.email}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            ) : (
-              <p className="text-white">{profile.email}</p>
+            <p className="text-white">{isLoading ? 'Memuat...' : (user?.email || '-')}</p>
+            {isEditing && (
+              <p className="mt-2 text-xs text-purple-300">Email tidak bisa diubah dari halaman ini.</p>
             )}
           </div>
 
@@ -98,55 +173,43 @@ export default function ProfilePage() {
             {isEditing ? (
               <input
                 type="tel"
-                name="phone"
-                value={profile.phone}
-                onChange={handleInputChange}
+                value={noHp}
+                onChange={(e) => setNoHp(e.target.value)}
                 className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             ) : (
-              <p className="text-white">{profile.phone}</p>
+              <p className="text-white">{isLoading ? 'Memuat...' : (user?.noHp || '-')}</p>
             )}
           </div>
 
-          {/* Institution */}
+          {/* Email Pemulihan */}
           <div>
-            <label className="block text-sm font-medium text-purple-200 mb-2">Institusi</label>
+            <label className="block text-sm font-medium text-purple-200 mb-2">Email Pemulihan</label>
             {isEditing ? (
               <input
                 type="text"
-                name="institution"
-                value={profile.institution}
-                onChange={handleInputChange}
+                value={emailPemulihan}
+                onChange={(e) => setEmailPemulihan(e.target.value)}
                 className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             ) : (
-              <p className="text-white">{profile.institution}</p>
+              <p className="text-white">{isLoading ? 'Memuat...' : (user?.emailPemulihan || '-')}</p>
             )}
           </div>
 
           {/* Role */}
           <div>
             <label className="block text-sm font-medium text-purple-200 mb-2">Role</label>
-            {isEditing ? (
-              <select
-                name="role"
-                value={profile.role}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 rounded-lg border border-purple-600 bg-purple-900/40 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option>Student</option>
-                <option>Mentor</option>
-                <option>Instructor</option>
-              </select>
-            ) : (
-              <p className="text-white">{profile.role}</p>
+            <p className="text-white">{isLoading ? 'Memuat...' : roleLabel(user?.role || '')}</p>
+            {user?.status && !isLoading && (
+              <p className="mt-2 text-xs text-purple-300">Status: {user.status}</p>
             )}
           </div>
 
           {/* Join Date */}
           <div>
             <label className="block text-sm font-medium text-purple-200 mb-2">Tanggal Bergabung</label>
-            <p className="text-white">{profile.joinDate}</p>
+            <p className="text-white">{isLoading ? 'Memuat...' : joinDate}</p>
           </div>
         </div>
 
@@ -154,15 +217,17 @@ export default function ProfilePage() {
           <div className="mt-6 flex gap-3 justify-end">
             <button
               onClick={() => setIsEditing(false)}
+              disabled={isSaving}
               className="px-6 py-2 rounded-lg border border-purple-600 hover:bg-purple-900/30 text-white font-medium transition"
             >
               Batal
             </button>
             <button
               onClick={handleSave}
+              disabled={isSaving}
               className="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:shadow-lg hover:shadow-purple-600/50 text-white font-medium transition"
             >
-              Simpan Perubahan
+              {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </div>
         )}
@@ -173,7 +238,10 @@ export default function ProfilePage() {
         <h2 className="text-xl font-semibold text-white mb-6">Keamanan</h2>
 
         <div className="space-y-4">
-          <button className="w-full text-left px-4 py-3 rounded-lg border border-purple-600 hover:bg-purple-900/30 text-white font-medium transition">
+          <button
+            disabled
+            className="w-full text-left px-4 py-3 rounded-lg border border-purple-600/50 bg-purple-950/20 text-purple-300 font-medium transition cursor-not-allowed"
+          >
             <div className="flex items-center justify-between">
               <span>Ubah Kata Sandi</span>
               <svg className="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,7 +250,10 @@ export default function ProfilePage() {
             </div>
           </button>
 
-          <button className="w-full text-left px-4 py-3 rounded-lg border border-purple-600 hover:bg-purple-900/30 text-white font-medium transition">
+          <button
+            disabled
+            className="w-full text-left px-4 py-3 rounded-lg border border-purple-600/50 bg-purple-950/20 text-purple-300 font-medium transition cursor-not-allowed"
+          >
             <div className="flex items-center justify-between">
               <span>Kelola Sesi Login</span>
               <svg className="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,7 +262,10 @@ export default function ProfilePage() {
             </div>
           </button>
 
-          <button className="w-full text-left px-4 py-3 rounded-lg border border-purple-600 hover:bg-purple-900/30 text-white font-medium transition">
+          <button
+            disabled
+            className="w-full text-left px-4 py-3 rounded-lg border border-purple-600/50 bg-purple-950/20 text-purple-300 font-medium transition cursor-not-allowed"
+          >
             <div className="flex items-center justify-between">
               <span>Verifikasi Dua Faktor</span>
               <svg className="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,16 +274,15 @@ export default function ProfilePage() {
             </div>
           </button>
         </div>
+        <p className="mt-3 text-xs text-purple-300">Fitur keamanan lanjutan masih OTW.</p>
       </div>
 
       {/* Danger Zone */}
       <div className="rounded-lg border border-red-600/50 bg-red-900/10 p-6">
-        <h2 className="text-xl font-semibold text-red-400 mb-6">Zona Berbahaya</h2>
-
-        <button className="w-full px-4 py-3 rounded-lg border border-red-600/50 hover:bg-red-900/20 text-red-400 font-medium transition">
-          Hapus Akun
-        </button>
-        <p className="text-xs text-red-400/70 mt-2">Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.</p>
+        <h2 className="text-xl font-semibold text-red-400 mb-3">Zona Berbahaya</h2>
+        <p className="text-xs text-red-300/80">
+          Penghapusan akun belum tersedia dari halaman ini.
+        </p>
       </div>
     </div>
   );
