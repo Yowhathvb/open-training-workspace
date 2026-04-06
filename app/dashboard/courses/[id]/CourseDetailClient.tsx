@@ -17,6 +17,11 @@ type CourseItem = {
   type: ItemType;
   title: string;
   description?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+  thumbnailUrl?: string;
   createdAt?: string;
 };
 
@@ -30,6 +35,7 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
   const [type, setType] = useState<ItemType>('materi');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
   const grouped = useMemo(() => {
@@ -80,11 +86,21 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
     setIsAdding(true);
     setErrorMessage(null);
     try {
-      const res = await fetch(`/api/courses/${courseId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, title, description }),
-      });
+      const isMateriWithFile = type === 'materi' && Boolean(file);
+      const res = await fetch(`/api/courses/${courseId}/items`, isMateriWithFile
+        ? (() => {
+            const form = new FormData();
+            form.append('type', type);
+            form.append('title', title);
+            form.append('description', description);
+            if (file) form.append('file', file);
+            return { method: 'POST', body: form };
+          })()
+        : {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, title, description }),
+          });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setErrorMessage(data?.error || 'Gagal menambah konten');
@@ -92,6 +108,7 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
       }
       setTitle('');
       setDescription('');
+      setFile(null);
       await fetchAll();
     } catch (err: any) {
       setErrorMessage(err?.message || 'Gagal menambah konten');
@@ -139,8 +156,12 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
               <label className="block text-sm font-semibold text-white mb-2">Tipe</label>
               <select
                 value={type}
-                onChange={(e) => setType(e.target.value as ItemType)}
-                className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) => {
+                  const nextType = e.target.value as ItemType;
+                  setType(nextType);
+                  if (nextType !== 'materi') setFile(null);
+                }}
+                className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="materi">Materi</option>
                 <option value="tugas">Tugas</option>
@@ -158,6 +179,19 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                 required
               />
             </div>
+            {type === 'materi' && (
+              <div className="md:col-span-3">
+                <label className="block text-sm font-semibold text-white mb-2">
+                  File (opsional)
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white file:mr-3 file:rounded-md file:border-0 file:bg-purple-700 file:px-3 file:py-2 file:text-white hover:file:bg-purple-600"
+                />
+                {file && <div className="mt-2 text-xs text-purple-200">Dipilih: {file.name}</div>}
+              </div>
+            )}
             <div className="md:col-span-3">
               <label className="block text-sm font-semibold text-white mb-2">
                 Deskripsi (opsional)
@@ -201,11 +235,25 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                 {grouped[t].map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-xl border border-purple-700 bg-purple-950/30 p-4"
+                    className="min-w-0 overflow-hidden rounded-xl border border-purple-700 bg-purple-950/30 p-4"
                   >
                     <div className="text-white font-semibold">{item.title}</div>
                     {item.description && (
                       <div className="mt-2 text-sm text-purple-200">{item.description}</div>
+                    )}
+                    {item.fileUrl && (
+                      <div className="mt-3">
+                        <a
+                          href={`/api/courses/${courseId}/items/${item.id}/download`}
+                          title={item.fileName || 'Download file'}
+                          className="flex w-full max-w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-purple-600 bg-purple-900/30 px-3 py-2 text-sm text-purple-100 hover:bg-purple-900/50"
+                        >
+                          <span className="shrink-0">Download:</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {item.fileName || 'file'}
+                          </span>
+                        </a>
+                      </div>
                     )}
                     {item.createdAt && (
                       <div className="mt-3 text-xs text-purple-400">
@@ -222,4 +270,3 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
     </div>
   );
 }
-
