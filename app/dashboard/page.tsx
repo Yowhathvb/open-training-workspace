@@ -652,7 +652,7 @@ export default async function DashboardPage() {
   return (
     <div className="p-6 md:p-8">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Selamat Bekerja</h1>
+        <h1 className="text-4xl font-bold text-white mb-2">Selamat Datang</h1>
         <p className="text-purple-200">{headerSubtitle}</p>
       </div>
 
