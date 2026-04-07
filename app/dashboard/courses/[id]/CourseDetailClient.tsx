@@ -271,7 +271,7 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
         <div className="mb-10 rounded-2xl border border-purple-600 bg-purple-900/30 p-6">
           <h2 className="text-lg font-semibold text-white">Tambah Konten</h2>
           <p className="mt-1 text-sm text-purple-200">
-            Guru bisa menambahkan materi, tugas, kuis, atau absensi.
+            Guru bisa menambahkan materi, tugas, atau absensi. Kuis dibuat lewat tombol khusus.
           </p>
 
           <form onSubmit={handleAdd} className="mt-5 grid gap-4 md:grid-cols-3">
@@ -288,9 +288,17 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
               >
                 <option value="materi">Materi</option>
                 <option value="tugas">Tugas</option>
-                <option value="kuis">Kuis</option>
                 <option value="absensi">Absensi</option>
               </select>
+
+              <div className="mt-3">
+                <Link
+                  href={`/dashboard/courses/${courseId}/kuis/new`}
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-purple-600 bg-purple-900/30 px-4 py-2 text-sm font-medium text-purple-100 hover:bg-purple-900/50 transition"
+                >
+                  Buat Kuis
+                </Link>
+              </div>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold text-white mb-2">Judul</label>
