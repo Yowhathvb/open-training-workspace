@@ -105,8 +105,15 @@ export async function POST(
       return NextResponse.json({ error: 'Judul wajib diisi' }, { status: 400 });
     }
 
+    const database = getRtdb();
+    const newItemRef = push(ref(database, `course_items/${courseId}`));
+    const newItemId = newItemRef.key;
+    if (!newItemId) {
+      return NextResponse.json({ error: 'Gagal membuat ID item' }, { status: 500 });
+    }
+
     let uploadMeta: Record<string, any> | null = null;
-    if (type === 'materi' && file) {
+    if ((type === 'materi' || type === 'tugas') && file) {
       if (!isImageKitConfigured()) {
         return NextResponse.json(
           { error: 'ImageKit belum dikonfigurasi' },
@@ -123,8 +130,14 @@ export async function POST(
       }
 
       const uploaded = await uploadToImageKit(file, {
-        folder: `/courses/${courseId}/materi`,
-        tags: ['course', courseId, 'materi'],
+        folder:
+          type === 'materi'
+            ? `/courses/${courseId}/materi`
+            : `/courses/${courseId}/tugas/${newItemId}`,
+        tags:
+          type === 'materi'
+            ? ['course', courseId, 'materi']
+            : ['course', courseId, 'tugas', newItemId],
       });
       uploadMeta = {
         fileUrl: uploaded.url,
@@ -146,8 +159,6 @@ export async function POST(
       createdAt: now,
     };
 
-    const database = getRtdb();
-    const newItemRef = push(ref(database, `course_items/${courseId}`));
     await set(newItemRef, itemData);
 
     return NextResponse.json({ ok: true, item: { id: newItemRef.key, ...itemData } }, { status: 201 });

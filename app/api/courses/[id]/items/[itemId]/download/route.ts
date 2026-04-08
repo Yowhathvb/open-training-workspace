@@ -76,7 +76,9 @@ export async function GET(
       return NextResponse.json({ error: 'Gagal mengambil file' }, { status: 502 });
     }
 
-    const filename = safeFileName(item?.fileName, `materi-${itemId}`);
+    const fallbackPrefix =
+      item?.type === 'tugas' ? 'tugas' : item?.type === 'materi' ? 'materi' : 'file';
+    const filename = safeFileName(item?.fileName, `${fallbackPrefix}-${itemId}`);
     const headers = new Headers();
     headers.set('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
     const len = upstream.headers.get('content-length');
@@ -90,4 +92,3 @@ export async function GET(
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-

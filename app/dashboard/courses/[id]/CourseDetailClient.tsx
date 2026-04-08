@@ -209,8 +209,8 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
     setIsAdding(true);
     setErrorMessage(null);
     try {
-      const isMateriWithFile = type === 'materi' && Boolean(file);
-      const res = await fetch(`/api/courses/${courseId}/items`, isMateriWithFile
+      const isWithFile = (type === 'materi' || type === 'tugas') && Boolean(file);
+      const res = await fetch(`/api/courses/${courseId}/items`, isWithFile
         ? (() => {
             const form = new FormData();
             form.append('type', type);
@@ -282,7 +282,7 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                 onChange={(e) => {
                   const nextType = e.target.value as ItemType;
                   setType(nextType);
-                  if (nextType !== 'materi') setFile(null);
+                  setFile(null);
                 }}
                 className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
@@ -310,7 +310,7 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                 required
               />
             </div>
-            {type === 'materi' && (
+            {(type === 'materi' || type === 'tugas') && (
               <div className="md:col-span-3">
                 <label className="block text-sm font-semibold text-white mb-2">
                   File (opsional)
