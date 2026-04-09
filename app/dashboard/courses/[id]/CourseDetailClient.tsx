@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Script from 'next/script';
 import { useEffect, useMemo, useState } from 'react';
 
 type Course = {
@@ -46,6 +47,41 @@ type Comment = {
   createdAt?: string;
 };
 
+type QuizAttemptMeta = {
+  submittedAt?: string | null;
+  score?: number | null;
+  totalPoints?: number | null;
+  gradingEnabled?: boolean;
+  showScoreToStudent?: boolean;
+};
+
+type AttendanceAttemptMeta = {
+  submittedAt?: string | null;
+  status?: string | null;
+};
+
+function formatLocalYYYYMMDD(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+async function showAlertError(message: string) {
+  if (typeof window === 'undefined') return;
+  const Swal = (window as any).Swal;
+  if (Swal?.fire) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: message,
+      confirmButtonColor: '#7c3aed',
+    });
+    return;
+  }
+  window.alert(message);
+}
+
 export default function CourseDetailClient({ courseId }: { courseId: string }) {
   const [course, setCourse] = useState<Course | null>(null);
   const [items, setItems] = useState<CourseItem[]>([]);
@@ -58,6 +94,9 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [attendanceDate, setAttendanceDate] = useState(() => formatLocalYYYYMMDD(new Date()));
+  const [attendanceStartTime, setAttendanceStartTime] = useState('');
+  const [attendanceEndTime, setAttendanceEndTime] = useState('');
 
   const [submissionsOpen, setSubmissionsOpen] = useState<Record<string, boolean>>({});
   const [submissionsByItem, setSubmissionsByItem] = useState<Record<string, Submission[]>>({});
@@ -69,6 +108,9 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
   const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
   const [commentsError, setCommentsError] = useState<Record<string, string | null>>({});
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+
+  const [quizAttemptsById, setQuizAttemptsById] = useState<Record<string, QuizAttemptMeta>>({});
+  const [attendanceAttemptsById, setAttendanceAttemptsById] = useState<Record<string, AttendanceAttemptMeta>>({});
 
   const grouped = useMemo(() => {
     const map: Record<ItemType, CourseItem[]> = {
@@ -100,7 +142,27 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
         setErrorMessage(itemsData?.error || 'Gagal memuat konten');
         return;
       }
-      setItems(itemsData.items || []);
+      const fetchedItems = itemsData.items || [];
+      setItems(fetchedItems);
+
+      const hasQuiz = Array.isArray(fetchedItems) && fetchedItems.some((it: any) => it?.type === 'kuis');
+      const hasAbsensi = Array.isArray(fetchedItems) && fetchedItems.some((it: any) => it?.type === 'absensi');
+
+      if (!hasQuiz) {
+        setQuizAttemptsById({});
+      } else {
+        const attemptsRes = await fetch(`/api/courses/${courseId}/kuis/attempts`);
+        const attemptsData = await attemptsRes.json().catch(() => ({}));
+        setQuizAttemptsById(attemptsRes.ok ? (attemptsData?.attemptsByKuisId || {}) : {});
+      }
+
+      if (!hasAbsensi) {
+        setAttendanceAttemptsById({});
+      } else {
+        const attemptsRes = await fetch(`/api/courses/${courseId}/absensi/attempts`);
+        const attemptsData = await attemptsRes.json().catch(() => ({}));
+        setAttendanceAttemptsById(attemptsRes.ok ? (attemptsData?.attemptsByAbsensiId || {}) : {});
+      }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Gagal memuat');
     } finally {
@@ -209,6 +271,65 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
     setIsAdding(true);
     setErrorMessage(null);
     try {
+      if (type === 'absensi') {
+        const date = attendanceDate;
+        const startTime = attendanceStartTime;
+        const endTime = attendanceEndTime;
+        if (!date) {
+          await showAlertError('Tanggal wajib diisi');
+          return;
+        }
+        if (!startTime) {
+          await showAlertError('Jam mulai wajib diisi');
+          return;
+        }
+        if (!endTime) {
+          await showAlertError('Jam selesai wajib diisi');
+          return;
+        }
+        const startAtDate = new Date(`${date}T${startTime}:00`);
+        const endAtDate = new Date(`${date}T${endTime}:00`);
+        if (Number.isNaN(startAtDate.getTime()) || Number.isNaN(endAtDate.getTime())) {
+          await showAlertError('Tanggal/jam tidak valid');
+          return;
+        }
+        if (endAtDate.getTime() <= startAtDate.getTime()) {
+          await showAlertError('Jam selesai harus lebih besar dari jam mulai');
+          return;
+        }
+        if (endAtDate.getTime() <= Date.now()) {
+          await showAlertError('Jam selesai harus di masa depan');
+          return;
+        }
+
+        const res = await fetch(`/api/courses/${courseId}/absensi`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description,
+            date,
+            startTime,
+            endTime,
+            startAt: startAtDate.toISOString(),
+            endAt: endAtDate.toISOString(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          await showAlertError(data?.error || 'Gagal membuat absensi');
+          return;
+        }
+
+        setTitle('');
+        setDescription('');
+        setAttendanceDate(formatLocalYYYYMMDD(new Date()));
+        setAttendanceStartTime('');
+        setAttendanceEndTime('');
+        await fetchAll();
+        return;
+      }
+
       const isWithFile = (type === 'materi' || type === 'tugas') && Boolean(file);
       const res = await fetch(`/api/courses/${courseId}/items`, isWithFile
         ? (() => {
@@ -260,6 +381,14 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
 
   return (
     <div className="p-6 md:p-8">
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"
+      />
+      <Script
+        src="https://cdn.jsdelivr.net/npm/sweetalert2@11"
+        strategy="afterInteractive"
+      />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white mb-2">{course.title}</h1>
         <p className="text-purple-200">
@@ -269,27 +398,34 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
 
       {canManage && (
         <div className="mb-10 rounded-2xl border border-purple-600 bg-purple-900/30 p-6">
-          <h2 className="text-lg font-semibold text-white">Tambah Konten</h2>
-          <p className="mt-1 text-sm text-purple-200">
-            Guru bisa menambahkan materi, tugas, atau absensi. Kuis dibuat lewat tombol khusus.
-          </p>
+           <h2 className="text-lg font-semibold text-white">Tambah Konten</h2>
+           <p className="mt-1 text-sm text-purple-200">
+            Guru bisa menambahkan materi, tugas, atau absensi (dengan tanggal & batas jam). Kuis dibuat lewat tombol khusus.
+           </p>
 
-          <form onSubmit={handleAdd} className="mt-5 grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="block text-sm font-semibold text-white mb-2">Tipe</label>
+           <form onSubmit={handleAdd} className="mt-5 grid gap-4 md:grid-cols-3">
+             <div>
+               <label className="block text-sm font-semibold text-white mb-2">Tipe</label>
               <select
                 value={type}
-                onChange={(e) => {
-                  const nextType = e.target.value as ItemType;
-                  setType(nextType);
-                  setFile(null);
-                }}
-                className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="materi">Materi</option>
-                <option value="tugas">Tugas</option>
-                <option value="absensi">Absensi</option>
-              </select>
+                  onChange={(e) => {
+                    const nextType = e.target.value as ItemType;
+                    setType(nextType);
+                    setFile(null);
+                    if (nextType === 'absensi') {
+                      setTitle('');
+                    }
+                    if (nextType !== 'absensi') {
+                      setAttendanceStartTime('');
+                      setAttendanceEndTime('');
+                    }
+                  }}
+                 className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+               >
+                 <option value="materi">Materi</option>
+                 <option value="tugas">Tugas</option>
+                 <option value="absensi">Absensi</option>
+               </select>
 
               <div className="mt-3">
                 <Link
@@ -300,16 +436,74 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                 </Link>
               </div>
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-white mb-2">Judul</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white placeholder-purple-300 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                placeholder="Judul konten"
-                required
-              />
-            </div>
+            {type !== 'absensi' ? (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-white mb-2">Judul</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white placeholder-purple-300 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  placeholder="Judul konten"
+                  required
+                />
+              </div>
+            ) : (
+              <div className="md:col-span-2 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Tanggal</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={attendanceDate}
+                      onChange={(e) => setAttendanceDate(e.target.value)}
+                      className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceDate(formatLocalYYYYMMDD(new Date()))}
+                      className="shrink-0 rounded-lg border border-purple-600 bg-purple-900/30 px-3 py-3 text-xs font-medium text-purple-100 hover:bg-purple-900/50 transition"
+                    >
+                      Today
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Jam mulai</label>
+                  <input
+                    type="time"
+                    value={attendanceStartTime}
+                    onChange={(e) => setAttendanceStartTime(e.target.value)}
+                    list="time-options"
+                    className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Jam selesai</label>
+                  <input
+                    type="time"
+                    value={attendanceEndTime}
+                    onChange={(e) => setAttendanceEndTime(e.target.value)}
+                    list="time-options"
+                    className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    required
+                  />
+                </div>
+                <div className="md:col-span-2 text-xs text-purple-200">
+                  Judul otomatis: <span className="font-semibold text-purple-100">{title || `Absensi ${attendanceDate}`}</span>
+                </div>
+                <datalist id="time-options">
+                  {Array.from({ length: 24 * 2 }, (_, idx) => {
+                    const totalMinutes = idx * 30;
+                    const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+                    const mm = String(totalMinutes % 60).padStart(2, '0');
+                    const value = `${hh}:${mm}`;
+                    return <option key={value} value={value} />;
+                  })}
+                </datalist>
+              </div>
+            )}
             {(type === 'materi' || type === 'tugas') && (
               <div className="md:col-span-3">
                 <label className="block text-sm font-semibold text-white mb-2">
@@ -470,6 +664,69 @@ export default function CourseDetailClient({ courseId }: { courseId: string }) {
                             )}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {item.type === 'kuis' && (
+                      <div className="mt-4 rounded-lg border border-purple-700 bg-purple-950/20 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-purple-100">Pengerjaan kuis</div>
+                          <Link
+                            href={`/dashboard/courses/${courseId}/kuis/${item.id}`}
+                            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-3 py-1.5 text-xs font-medium text-white hover:shadow-lg hover:shadow-purple-600/30 transition"
+                          >
+                            {quizAttemptsById[item.id]?.submittedAt ? 'Lihat hasil' : 'Kerjakan kuis'}
+                          </Link>
+                        </div>
+
+                        <div className="mt-2 text-xs text-purple-200">
+                          {quizAttemptsById[item.id]?.submittedAt ? (
+                            quizAttemptsById[item.id]?.showScoreToStudent &&
+                            quizAttemptsById[item.id]?.score !== null &&
+                            quizAttemptsById[item.id]?.score !== undefined &&
+                            quizAttemptsById[item.id]?.totalPoints !== null &&
+                            quizAttemptsById[item.id]?.totalPoints !== undefined ? (
+                              <>
+                                Nilai akhir: {quizAttemptsById[item.id]?.score}/
+                                {quizAttemptsById[item.id]?.totalPoints}
+                              </>
+                            ) : quizAttemptsById[item.id]?.gradingEnabled ? (
+                              <>Sudah dikirim (nilai tidak ditampilkan).</>
+                            ) : (
+                              <>Sudah dikirim.</>
+                            )
+                          ) : (
+                            <>Belum dikerjakan.</>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {item.type === 'absensi' && (
+                      <div className="mt-4 rounded-lg border border-purple-700 bg-purple-950/20 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-purple-100">Absensi</div>
+                          <Link
+                            href={`/dashboard/courses/${courseId}/absensi/${item.id}`}
+                            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-3 py-1.5 text-xs font-medium text-white hover:shadow-lg hover:shadow-purple-600/30 transition"
+                          >
+                            {attendanceAttemptsById[item.id]?.submittedAt ? 'Lihat' : 'Absen'}
+                          </Link>
+                        </div>
+
+                        <div className="mt-2 text-xs text-purple-200">
+                          {attendanceAttemptsById[item.id]?.submittedAt ? (
+                            <>
+                              Sudah absen
+                              {attendanceAttemptsById[item.id]?.status
+                                ? ` (${attendanceAttemptsById[item.id]?.status})`
+                                : ''}
+                              .
+                            </>
+                          ) : (
+                            <>Belum absen.</>
+                          )}
+                        </div>
                       </div>
                     )}
 

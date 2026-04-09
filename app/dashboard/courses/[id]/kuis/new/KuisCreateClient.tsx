@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 type AnswerType = 'multiple_choice' | 'short' | 'paragraph';
+type PointsMode = 'auto' | 'custom';
 
 type QuestionDraft = {
   id: string;
@@ -13,6 +14,7 @@ type QuestionDraft = {
   options: string[];
   answerKeyIndex: number | null;
   answerKeyText: string;
+  points: number;
 };
 
 function makeId(prefix: string) {
@@ -36,7 +38,15 @@ function makeQuestion(): QuestionDraft {
     options: ['', ''],
     answerKeyIndex: null,
     answerKeyText: '',
+    points: 0,
   };
+}
+
+function splitPointsEvenly(totalPoints: number, count: number) {
+  if (count <= 0) return [];
+  const base = Math.floor(totalPoints / count);
+  const remainder = totalPoints % count;
+  return Array.from({ length: count }, (_, idx) => base + (idx < remainder ? 1 : 0));
 }
 
 export default function KuisCreateClient({ courseId }: { courseId: string }) {
@@ -45,6 +55,9 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<QuestionDraft[]>([makeQuestion()]);
+  const [gradingEnabled, setGradingEnabled] = useState(true);
+  const [showScoreToStudent, setShowScoreToStudent] = useState(true);
+  const [pointsMode, setPointsMode] = useState<PointsMode>('auto');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -52,6 +65,16 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return 'Judul kuis wajib diisi';
     if (questions.length === 0) return 'Minimal 1 soal';
+
+    if (gradingEnabled && pointsMode === 'custom') {
+      let sum = 0;
+      for (let i = 0; i < questions.length; i++) {
+        const pts = questions[i].points;
+        if (!Number.isInteger(pts) || pts < 0) return `Soal #${i + 1}: poin harus angka bulat >= 0`;
+        sum += pts;
+      }
+      if (sum !== 100) return `Total poin harus 100 (saat ini: ${sum})`;
+    }
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -68,6 +91,13 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
           if (q.answerKeyIndex < 0 || q.answerKeyIndex >= q.options.length) {
             return `Soal #${i + 1}: kunci jawaban di luar pilihan`;
           }
+        }
+        if (gradingEnabled && q.answerKeyIndex === null) {
+          return `Soal #${i + 1}: kunci jawaban wajib diisi jika penilaian diaktifkan`;
+        }
+      } else if (gradingEnabled) {
+        if (!q.answerKeyText.trim()) {
+          return `Soal #${i + 1}: kunci jawaban wajib diisi jika penilaian diaktifkan`;
         }
       }
     }
@@ -90,6 +120,12 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
       const payload = {
         title: title.trim(),
         description: description.trim(),
+        grading: {
+          enabled: gradingEnabled,
+          showScoreToStudent: gradingEnabled ? showScoreToStudent : false,
+          pointsMode: gradingEnabled ? pointsMode : 'auto',
+          totalPoints: 100,
+        },
         questions: questions.map((q) => {
           if (q.answerType === 'multiple_choice') {
             return {
@@ -98,6 +134,7 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
               answerType: q.answerType,
               options: q.options.map((opt) => opt.trim()),
               answerKeyIndex: q.answerKeyIndex,
+              ...(gradingEnabled && pointsMode === 'custom' ? { points: q.points } : {}),
             };
           }
           return {
@@ -105,6 +142,7 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
             prompt: q.prompt.trim(),
             answerType: q.answerType,
             answerKeyText: q.answerKeyText.trim(),
+            ...(gradingEnabled && pointsMode === 'custom' ? { points: q.points } : {}),
           };
         }),
       };
@@ -136,8 +174,8 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
         </Link>
         <h1 className="mt-3 text-2xl font-bold text-white">Buat Kuis</h1>
         <p className="mt-1 text-sm text-purple-200">
-          Tambahkan soal, jenis jawaban, dan kunci jawaban (opsional). Untuk pilihan ganda, kunci jawaban pilih salah
-          satu opsi (A-Z).
+          Tambahkan soal, jenis jawaban, dan kunci jawaban. Jika penilaian diaktifkan, kunci jawaban wajib diisi.
+          Untuk pilihan ganda, kunci jawaban pilih salah satu opsi (A-Z).
         </p>
       </div>
 
@@ -164,6 +202,86 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
               />
             </div>
           </div>
+
+          <div className="mt-6 rounded-xl border border-purple-700 bg-purple-950/20 p-4">
+            <div className="text-sm font-semibold text-purple-100">Penilaian</div>
+
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <label className="flex items-center gap-3 text-sm text-purple-100">
+                <input
+                  type="checkbox"
+                  checked={gradingEnabled}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setGradingEnabled(next);
+                    if (!next) setShowScoreToStudent(false);
+                  }}
+                  className="h-4 w-4 accent-purple-600"
+                />
+                Aktifkan penilaian (nilai akhir)
+              </label>
+
+              <label
+                className={`flex items-center gap-3 text-sm ${
+                  gradingEnabled ? 'text-purple-100' : 'text-purple-300/60'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showScoreToStudent}
+                  disabled={!gradingEnabled}
+                  onChange={(e) => setShowScoreToStudent(e.target.checked)}
+                  className="h-4 w-4 accent-purple-600 disabled:opacity-60"
+                />
+                Tampilkan nilai ke peserta
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-white mb-2">Skema poin</label>
+                <select
+                  value={pointsMode}
+                  disabled={!gradingEnabled}
+                  onChange={(e) => {
+                    const next = e.target.value as PointsMode;
+                    setPointsMode(next);
+                    if (next === 'custom') {
+                      const points = splitPointsEvenly(100, questions.length);
+                      setQuestions((prev) => prev.map((q, idx) => ({ ...q, points: points[idx] ?? 0 })));
+                    }
+                  }}
+                  className="w-full rounded-lg border border-purple-300 bg-white px-4 py-3 text-purple-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
+                >
+                  <option value="auto">Otomatis (total 100 dibagi rata per soal)</option>
+                  <option value="custom">Custom per soal (total harus 100)</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-1">
+                <div className="text-sm font-semibold text-white mb-2">Total</div>
+                <div className="rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white">
+                  100 poin
+                </div>
+              </div>
+            </div>
+
+            {gradingEnabled && pointsMode === 'custom' ? (
+              <div className="mt-2 text-xs text-purple-200">
+                Total poin harus tepat 100.
+                <button
+                  type="button"
+                  onClick={() => {
+                    const points = splitPointsEvenly(100, questions.length);
+                    setQuestions((prev) => prev.map((q, idx) => ({ ...q, points: points[idx] ?? 0 })));
+                  }}
+                  className="ml-2 rounded-md border border-purple-600 bg-purple-900/20 px-2 py-1 text-xs text-purple-100 hover:bg-purple-900/50"
+                >
+                  Bagi rata
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid gap-4">
@@ -184,6 +302,35 @@ export default function KuisCreateClient({ courseId }: { courseId: string }) {
               </div>
 
               <div className="mt-4 grid gap-4">
+                {gradingEnabled && pointsMode === 'custom' ? (
+                  <div className="grid gap-2 md:grid-cols-3 items-end">
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-semibold text-white mb-2">Poin soal</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        value={Number.isFinite(q.points) ? q.points : 0}
+                        onChange={(e) => {
+                          const nextValue = Number(e.target.value);
+                          setQuestions((prev) =>
+                            prev.map((x) =>
+                              x.id === q.id ? { ...x, points: Number.isFinite(nextValue) ? nextValue : 0 } : x
+                            )
+                          );
+                        }}
+                        className="w-full rounded-lg border border-purple-600 bg-purple-900/40 px-4 py-3 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                        placeholder="0"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-2 text-xs text-purple-200">
+                      Total poin semua soal harus 100.
+                    </div>
+                  </div>
+                ) : null}
+
                 <div>
                   <label className="block text-sm font-semibold text-white mb-2">Soal</label>
                   <textarea

@@ -48,6 +48,12 @@ export async function POST(
     const title = normalizeString(body?.title);
     const description = normalizeString(body?.description);
     const rawQuestions = Array.isArray(body?.questions) ? body?.questions : [];
+    const rawGrading = body?.grading || null;
+    const gradingEnabled = Boolean(rawGrading?.enabled ?? true);
+    const showScoreToStudent = Boolean(rawGrading?.showScoreToStudent ?? true);
+    const pointsModeRaw = normalizeString(rawGrading?.pointsMode).toLowerCase();
+    const pointsMode: 'auto' | 'custom' = pointsModeRaw === 'custom' ? 'custom' : 'auto';
+    const totalPoints = 100;
 
     if (!title) return NextResponse.json({ error: 'Judul kuis wajib diisi' }, { status: 400 });
     if (rawQuestions.length === 0) return NextResponse.json({ error: 'Minimal 1 soal' }, { status: 400 });
@@ -56,6 +62,16 @@ export async function POST(
       const prompt = normalizeString(q?.prompt);
       const answerTypeRaw = normalizeString(q?.answerType);
       const id = normalizeString(q?.id) || `q_${idx + 1}`;
+      let points: number | undefined = undefined;
+
+      if (gradingEnabled && pointsMode === 'custom') {
+        const rawPoints = q?.points;
+        const parsedPoints = typeof rawPoints === 'string' && rawPoints.trim() !== '' ? Number(rawPoints) : rawPoints;
+        if (!Number.isInteger(parsedPoints) || parsedPoints < 0) {
+          throw Object.assign(new Error(`Soal #${idx + 1}: poin harus angka bulat >= 0`), { status: 400 });
+        }
+        points = parsedPoints;
+      }
 
       if (!prompt) throw Object.assign(new Error(`Soal #${idx + 1} wajib diisi`), { status: 400 });
       if (!isValidAnswerType(answerTypeRaw)) {
@@ -85,23 +101,46 @@ export async function POST(
           answerKey = parsed;
         }
 
+        if (gradingEnabled && answerKey === null) {
+          throw Object.assign(new Error(`Soal #${idx + 1}: kunci jawaban wajib diisi jika penilaian diaktifkan`), {
+            status: 400,
+          });
+        }
+
         return {
           id,
           prompt,
           answerType: answerTypeRaw,
           options,
           answerKey,
+          ...(points !== undefined ? { points } : {}),
         };
       }
 
       const answerKeyText = normalizeString(q?.answerKeyText);
+      if (gradingEnabled && !answerKeyText) {
+        throw Object.assign(new Error(`Soal #${idx + 1}: kunci jawaban wajib diisi jika penilaian diaktifkan`), {
+          status: 400,
+        });
+      }
       return {
         id,
         prompt,
         answerType: answerTypeRaw,
         answerKey: answerKeyText || null,
+        ...(points !== undefined ? { points } : {}),
       };
     });
+
+    if (gradingEnabled && pointsMode === 'custom') {
+      const sum = questions.reduce(
+        (acc: number, q: any) => acc + (Number.isFinite(q?.points) ? Number(q.points) : 0),
+        0
+      );
+      if (sum !== totalPoints) {
+        return NextResponse.json({ error: `Total poin harus ${totalPoints} (saat ini: ${sum})` }, { status: 400 });
+      }
+    }
 
     const now = new Date().toISOString();
     const itemData = {
@@ -115,6 +154,12 @@ export async function POST(
     const kuisData = {
       title,
       description,
+      grading: {
+        enabled: gradingEnabled,
+        showScoreToStudent: gradingEnabled ? showScoreToStudent : false,
+        pointsMode: gradingEnabled ? pointsMode : 'auto',
+        totalPoints,
+      },
       questions,
       createdBy: session.userId,
       createdAt: now,
@@ -138,4 +183,3 @@ export async function POST(
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-
