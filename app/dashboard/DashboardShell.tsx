@@ -76,6 +76,15 @@ export default function DashboardShell({
         ]
       : []),
     {
+      name: 'AI Chatbot',
+      href: '/dashboard/ai-chat',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8M8 14h5m-8 7l4-4h11a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h4z" />
+        </svg>
+      ),
+    },
+    {
       name: 'Kursus Saya',
       href: '/dashboard/my-courses',
       icon: (
