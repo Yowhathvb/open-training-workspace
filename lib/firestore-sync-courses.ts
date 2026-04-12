@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { doc, getFirestore, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getFirestore, setDoc } from 'firebase/firestore';
 
 type AnyCourse = Record<string, any>;
 
@@ -62,3 +62,8 @@ export async function syncCourseToFirestoreBestEffort(courseId: string, courseDa
   await bestEffort(setDoc(courseRef, toFirestoreCourse(courseData), { merge: true }));
 }
 
+export async function deleteCourseFromFirestoreBestEffort(courseId: string) {
+  const firestore = getFirestoreDb();
+  const courseRef = doc(firestore, COURSES_COLLECTION, courseId);
+  await bestEffort(deleteDoc(courseRef));
+}
