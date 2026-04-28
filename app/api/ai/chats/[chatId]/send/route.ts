@@ -186,9 +186,12 @@ export async function POST(
     const userMsgRef = push(ref(database, `ai_chat_messages/${session.userId}/${chatId}`));
     const assistantMsgRef = push(ref(database, `ai_chat_messages/${session.userId}/${chatId}`));
 
+    const userMessageId = userMsgRef.key || '';
+    const assistantMessageId = assistantMsgRef.key || '';
+
     await Promise.all([
       set(userMsgRef, { role: 'user', content: message, createdAt: ts }),
-      set(assistantMsgRef, { role: 'assistant', content: replyText || '(Tidak ada respon)', createdAt: nowIso() }),
+      set(assistantMsgRef, { role: 'assistant', content: replyText || '(Tidak ada respon)', createdAt: ts }),
     ]);
 
     const updates: Record<string, any> = {};
@@ -200,10 +203,16 @@ export async function POST(
     }
     await update(ref(database), updates);
 
-    return NextResponse.json({ ok: true, reply: replyText });
+    return NextResponse.json({
+      ok: true,
+      reply: replyText,
+      messages: {
+        user: { id: userMessageId, createdAt: ts },
+        assistant: { id: assistantMessageId, createdAt: ts },
+      },
+    });
   } catch (error: any) {
     const status = error?.message === 'ENV_NOT_CONFIGURED' ? 503 : (error?.status || 500);
     return NextResponse.json({ error: error?.message || 'Internal error' }, { status });
   }
 }
-
