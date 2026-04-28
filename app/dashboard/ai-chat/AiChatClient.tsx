@@ -16,7 +16,9 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   createdAt?: string | null;
-  status?: 'loading';
+  status?: 'loading' | 'revealing';
+  fullContent?: string;
+  revealLen?: number;
 };
 
 type EnrolledCourse = {
@@ -251,6 +253,23 @@ export default function AiChatClient() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
+  const revealMessageIdRef = useRef<string | null>(null);
+  const autoScrollRef = useRef(true);
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  };
+
+  const handleMessagesScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // If user scrolls up, stop auto-following; re-enable when near bottom again.
+    autoScrollRef.current = distance < 120;
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -313,7 +332,7 @@ export default function AiChatClient() {
     } finally {
       setIsLoadingChat(false);
       setTimeout(() => {
-        listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+        scrollToBottom('auto');
       }, 50);
     }
   };
@@ -414,6 +433,7 @@ export default function AiChatClient() {
     setIsSending(true);
     setErrorMessage(null);
     setDraft('');
+    autoScrollRef.current = true;
 
     const optimisticUser: ChatMessage = {
       id: `tmp_user_${Date.now()}`,
@@ -429,6 +449,7 @@ export default function AiChatClient() {
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticUser, optimisticLoading]);
+    setTimeout(() => scrollToBottom('smooth'), 0);
 
     try {
       const res = await fetch(`/api/ai/chats/${selectedChatId}/send`, {
@@ -445,18 +466,34 @@ export default function AiChatClient() {
       }
 
       const reply = normalizeString(data?.reply) || '(Tidak ada respon)';
-      const optimisticAssistant: ChatMessage = {
-        id: `tmp_assistant_${Date.now()}`,
-        role: 'assistant',
-        content: reply,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== optimisticLoading.id),
-        optimisticAssistant,
-      ]);
+      const serverUserId = normalizeString(data?.messages?.user?.id) || '';
+      const serverAssistantId = normalizeString(data?.messages?.assistant?.id) || '';
+      const serverCreatedAt = normalizeString(data?.messages?.assistant?.createdAt) || new Date().toISOString();
+
+      setMessages((prev) =>
+        prev
+          .map((m) => {
+            if (m.id === optimisticUser.id && serverUserId) {
+              return { ...m, id: serverUserId, createdAt: normalizeString(data?.messages?.user?.createdAt) || m.createdAt };
+            }
+            return m;
+          })
+          .filter((m) => m.id !== optimisticLoading.id)
+          .concat([
+            {
+              id: serverAssistantId || `tmp_assistant_${Date.now()}`,
+              role: 'assistant',
+              content: '',
+              fullContent: reply,
+              revealLen: 0,
+              status: 'revealing',
+              createdAt: serverCreatedAt,
+            } as ChatMessage,
+          ])
+      );
+
       await refreshChats(selectedChatId);
-      await loadChat(selectedChatId);
+      setTimeout(() => scrollToBottom('smooth'), 0);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Gagal mengirim pesan');
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id && m.id !== optimisticLoading.id));
@@ -464,10 +501,54 @@ export default function AiChatClient() {
     } finally {
       setIsSending(false);
       setTimeout(() => {
-        listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+        scrollToBottom('smooth');
       }, 50);
     }
   };
+
+  useEffect(() => {
+    const revealing = messages.find((m) => m.status === 'revealing');
+    if (!revealing) {
+      if (revealTimerRef.current) {
+        window.clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+      revealMessageIdRef.current = null;
+      return;
+    }
+
+    if (revealMessageIdRef.current === revealing.id && revealTimerRef.current) return;
+    revealMessageIdRef.current = revealing.id;
+    if (revealTimerRef.current) {
+      window.clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+
+    const stepMs = 18;
+    revealTimerRef.current = window.setInterval(() => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== revealing.id || m.status !== 'revealing') return m;
+          const full = m.fullContent ?? '';
+          const current = Number.isFinite(m.revealLen) ? Number(m.revealLen) : 0;
+          const speed = Math.max(2, Math.min(12, Math.ceil(full.length / 90)));
+          const nextLen = Math.min(full.length, current + speed);
+          if (nextLen >= full.length) {
+            return { ...m, content: full, status: undefined, fullContent: undefined, revealLen: undefined };
+          }
+          return { ...m, content: full.slice(0, nextLen), revealLen: nextLen };
+        })
+      );
+      if (autoScrollRef.current) scrollToBottom('auto');
+    }, stepMs);
+
+    return () => {
+      if (revealTimerRef.current) {
+        window.clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    };
+  }, [messages]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -655,7 +736,11 @@ export default function AiChatClient() {
             <div className="p-6 text-purple-200">Pilih chat di sebelah kiri, atau buat chat baru.</div>
           ) : (
             <>
-              <div ref={listRef} className="h-[60vh] overflow-y-auto p-4 space-y-4">
+              <div
+                ref={listRef}
+                onScroll={handleMessagesScroll}
+                className="h-[60vh] overflow-y-auto p-4 space-y-4"
+              >
                 {messages.length === 0 ? (
                   <div className="text-purple-200 text-sm">
                     Mulai chat dengan mengetik pesan di bawah.
@@ -727,7 +812,7 @@ export default function AiChatClient() {
                           </div>
                         )}
 
-                        {m.status !== 'loading' && (
+                        {!m.status && (
                           <div className="mt-3 flex items-center justify-between gap-3">
                             <div className="text-[11px] text-purple-300">
                               {m.createdAt ? displayTime(m.createdAt) : ''}
